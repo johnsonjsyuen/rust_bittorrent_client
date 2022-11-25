@@ -4,7 +4,7 @@ use std::str;
 use bencode::{BEncode, decode_buf_first};
 
 fn main() {
-    let file_path = "C:\\Users\\Johnson\\CLionProjects\\rust_bittorrent_client\\ubuntu.torrent";
+    let file_path = "ubuntu.torrent";
     let contents = fs::read(file_path)
         .expect("Should have been able to read the file");
 
