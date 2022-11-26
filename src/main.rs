@@ -10,7 +10,6 @@ use serde::{Deserialize, Deserializer};
 use reqwest::{Client, Url};
 use sha1::{Digest, Sha1};
 use lava_torrent::bencode::BencodeElem;
-use tokio::io::AsyncReadExt;
 use tokio_byteorder::{BigEndian, AsyncReadBytesExt};
 use std::io::Cursor;
 
@@ -89,13 +88,13 @@ async fn unmarshal_peers(peers_bin: &[u8]) -> Result<Vec<SocketAddrV4>> {
     let num_peers = peers_bin.len() / peersize;
     for num_peer in 0..num_peers {
         let offset = num_peer * peersize;
-        peers.push(bytes_to_addr(&peers_bin[offset..offset+5]))
+        peers.push(bytes_to_addr(&peers_bin[offset..offset+5]).await)
     };
     Ok(peers)
 }
 
 async fn bytes_to_addr(p: &[u8]) -> SocketAddrV4 {
     let ip = Ipv4Addr::new(p[0], p[1], p[2], p[3]);
-    let mut rdr =  Cursor::new(p);
-    SocketAddrV4::new(ip, rdr.read_u16::<BigEndian>(&p[4..]).await.unwrap())
+    let mut rdr =  Cursor::new(&p[4..]);
+    SocketAddrV4::new(ip, rdr.read_u16::<BigEndian>().await.unwrap())
 }
