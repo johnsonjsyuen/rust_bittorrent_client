@@ -18,6 +18,7 @@ async-channel = "1.6.1"
 lava_torrent = "0.8.1"
 urlencoding = "2.1.2"
 sha1 = "0.10.5"
+tokio-byteorder = "0.3.0"
 
 [profile.release]
 opt-level = "z"
