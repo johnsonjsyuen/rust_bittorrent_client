@@ -19,7 +19,8 @@ async fn main() -> Result<(), anyhow::Error> {
     let client = reqwest::Client::new();
     let torrent = Torrent::read_from_file(file_path).unwrap();
 
-    get_peer_list(torrent, client).await?;
+    let peer_list = get_peer_list(torrent, client).await?;
+    println!("Peer List: {:?}", peer_list);
     Ok(())
 }
 
@@ -95,6 +96,6 @@ async fn unmarshal_peers(peers_bin: &[u8]) -> Result<Vec<SocketAddrV4>> {
 
 async fn bytes_to_addr(p: &[u8]) -> SocketAddrV4 {
     let ip = Ipv4Addr::new(p[0], p[1], p[2], p[3]);
-    let mut rdr =  Cursor::new(&p[4..]);
+    let mut rdr =  Cursor::new(&p[3..]);
     SocketAddrV4::new(ip, rdr.read_u16::<BigEndian>().await.unwrap())
 }
