@@ -109,12 +109,13 @@ async fn get_peer_list(torrent: Torrent, client: Client) -> Result<BencodeTracke
 }
 
 async fn handshake_with_peer(peer: Peer) -> Result<()>{
-    let stream = TcpStream::connect(peer.socket)
-        .map(|mut stream| {
-        // Attempt to write bytes asynchronously to the stream
-        Message::handshake(&PEER_ID, &peer.info_hash);
-        stream.poll_write(&[1]);
-    });
+    // Connect to a peer
+    let mut stream = TcpStream::connect(peer.socket).await?;
+    let handshake = Message::handshake(&PEER_ID, &peer.info_hash);
+    let mut buf = [0u8; 68];
+    handshake.encode(&mut buf).expect("TODO: panic message");
+    stream.write_all(&buf).await?;
+
     Ok(())
 }
 
