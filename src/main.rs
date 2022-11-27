@@ -1,3 +1,6 @@
+mod protocol;
+mod message;
+
 use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
@@ -12,6 +15,8 @@ use sha1::{Digest, Sha1};
 use lava_torrent::bencode::BencodeElem;
 use tokio_byteorder::{BigEndian, AsyncReadBytesExt};
 use std::io::Cursor;
+
+use percent_encoding::{percent_encode, NON_ALPHANUMERIC};
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
@@ -31,10 +36,12 @@ struct BencodeTrackerResponse {
 }
 
 async fn get_peer_list(torrent: Torrent, client: Client) -> Result<BencodeTrackerResponse> {
-    let encoded_info_hash = torrent.clone().info_hash();
-    println!("Info hash {}", encoded_info_hash.clone());
-    println!("URL encoded Info hash {}", encode(&*encoded_info_hash.clone()));
+    let info_hash_bytes = torrent.clone().info_hash_bytes();
+    let percent_encoded_info_hash = percent_encode(&*info_hash_bytes.clone(), NON_ALPHANUMERIC).to_string();
+    println!("Info hash {:?}", info_hash_bytes.clone());
+    println!("URL encoded Info hash {}", percent_encoded_info_hash.clone());
 
+    let ss = percent_encoded_info_hash.clone();
     let params = [
         ("peer_id", "ABCDEFGHIJKLMNOPQRST"),
         ("port", "6881"),
@@ -46,8 +53,12 @@ async fn get_peer_list(torrent: Torrent, client: Client) -> Result<BencodeTracke
     let url = Url::parse_with_params(&*torrent.announce.unwrap(),
                                      &params)?;
 
+    // %9D%CC%EDN%3F%C4%97S%88%8FY%D5Y%CA%D9%EA%9D%D9%9E%A5
+    // 9d cc ed 4e 3f c4 97 53 88 8f 59 d5 59 ca d9 ea 9d d9 9e a5
+
     // parse_with_params does it's own encoding so we are encoding the info hash part separately
-    let url = format!("{}&info_hash=%9D%CC%EDN%3F%C4%97S%88%8FY%D5Y%CA%D9%EA%9D%D9%9E%A5", url);
+    //let url = format!("{}&info_hash=%9D%CC%EDN%3F%C4%97S%88%8FY%D5Y%CA%D9%EA%9D%D9%9E%A5", url);
+    let url = format!("{}&info_hash={}", url, ss.as_str());
     println!("{}", url.clone());
     let resp = client.get(url)
         .send()

@@ -19,6 +19,8 @@ lava_torrent = "0.8.1"
 urlencoding = "2.1.2"
 sha1 = "0.10.5"
 tokio-byteorder = "0.3.0"
+byteorder = "1.4.3"
+percent-encoding = "2.2.0"
 
 [profile.release]
 opt-level = "z"
