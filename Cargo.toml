@@ -21,6 +21,8 @@ sha1 = "0.10.5"
 tokio-byteorder = "0.3.0"
 byteorder = "1.4.3"
 percent-encoding = "2.2.0"
+lazy_static = "1.4.0"
+rand = "0.8.5"
 
 [profile.release]
 opt-level = "z"

@@ -1,35 +1,56 @@
 mod protocol;
-mod message;
 
-use std::collections::{BTreeMap, HashMap};
-use std::fs;
-use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
+
+
+use std::net::{Ipv4Addr, SocketAddrV4};
 use std::str;
-use anyhow::{anyhow, Error};
+use anyhow::{anyhow};
 use anyhow::Result;
 use lava_torrent::torrent::v1::Torrent;
 use urlencoding::{decode, encode, encode_binary};
-use serde::{Deserialize, Deserializer};
+use serde::{Deserialize};
 use reqwest::{Client, Url};
-use sha1::{Digest, Sha1};
 use lava_torrent::bencode::BencodeElem;
 use tokio_byteorder::{BigEndian, AsyncReadBytesExt};
 use std::io::Cursor;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::{TcpStream};
 
 use percent_encoding::{percent_encode, NON_ALPHANUMERIC};
+use crate::protocol::Message;
+use crate::protocol::Message::Handshake;
+
+#[macro_use]
+extern crate lazy_static;
+
+lazy_static! {
+    pub static ref PEER_ID: [u8; 20] = {
+        use rand::Rng;
+
+        let mut pid = [0u8; 20];
+        let prefix = b"-SY0010-";
+        pid[..prefix.len()].clone_from_slice(&prefix[..]);
+
+        let mut rng = rand::thread_rng();
+        for p in pid.iter_mut().skip(prefix.len()) {
+            *p = rng.gen();
+        }
+        pid
+    };
+}
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
     let file_path = "ubuntu.torrent";
-    let client = reqwest::Client::new();
+    let client = Client::new();
     let torrent = Torrent::read_from_file(file_path).unwrap();
 
     let peer_list = get_peer_list(torrent, client).await?;
-    println!("Peer List: {:?}", peer_list);
+    println!("Peer List: {:?}", peer_list.clone());
     Ok(())
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 struct BencodeTrackerResponse {
     interval: usize,
     peers: Vec<SocketAddrV4>,
@@ -43,7 +64,7 @@ async fn get_peer_list(torrent: Torrent, client: Client) -> Result<BencodeTracke
 
     let ss = percent_encoded_info_hash.clone();
     let params = [
-        ("peer_id", "ABCDEFGHIJKLMNOPQRST"),
+        ("peer_id", str::from_utf8(&*PEER_ID).unwrap()),
         ("port", "6881"),
         ("uploaded", "0"),
         ("downloaded", "0"),
@@ -53,11 +74,7 @@ async fn get_peer_list(torrent: Torrent, client: Client) -> Result<BencodeTracke
     let url = Url::parse_with_params(&*torrent.announce.unwrap(),
                                      &params)?;
 
-    // %9D%CC%EDN%3F%C4%97S%88%8FY%D5Y%CA%D9%EA%9D%D9%9E%A5
-    // 9d cc ed 4e 3f c4 97 53 88 8f 59 d5 59 ca d9 ea 9d d9 9e a5
-
     // parse_with_params does it's own encoding so we are encoding the info hash part separately
-    //let url = format!("{}&info_hash=%9D%CC%EDN%3F%C4%97S%88%8FY%D5Y%CA%D9%EA%9D%D9%9E%A5", url);
     let url = format!("{}&info_hash={}", url, ss.as_str());
     println!("{}", url.clone());
     let resp = client.get(url)
@@ -89,6 +106,21 @@ async fn get_peer_list(torrent: Torrent, client: Client) -> Result<BencodeTracke
         return Err(anyhow!("Invalid peers response"));
     }
 
+}
+
+async fn handshake_with_peer(peer: Peer) -> Result<()>{
+    let stream = TcpStream::connect(peer.socket)
+        .map(|mut stream| {
+        // Attempt to write bytes asynchronously to the stream
+        Message::handshake(&PEER_ID, &peer.info_hash);
+        stream.poll_write(&[1]);
+    });
+    Ok(())
+}
+
+struct Peer {
+    socket: SocketAddrV4,
+    info_hash: [u8; 20],
 }
 
 async fn unmarshal_peers(peers_bin: &[u8]) -> Result<Vec<SocketAddrV4>> {
